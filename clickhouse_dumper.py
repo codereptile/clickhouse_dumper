@@ -55,6 +55,7 @@ if args.dump_one_block is None:
 
         for instrument_date in instrument_dates:
             blocks.append([instrument, instrument_date])
+    utils.quiet_print(args.quiet, "")
 else:
     assert len(args.dump_one_block) == 2, "dump_one_block should be in format instrument,date"
     utils.quiet_print(args.quiet,

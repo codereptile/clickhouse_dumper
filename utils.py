@@ -1,3 +1,4 @@
+import datetime
 import gzip
 import os
 import glob
@@ -5,6 +6,19 @@ import sys
 import time
 
 MAX_BUFFER_LIMIT = 1000000
+
+
+def print_progress(a_total_blocks, a_processed_blocks, process_blocks_start_time):
+    seconds_to_finish = int(
+        (time.time() - process_blocks_start_time)
+        / a_processed_blocks * (a_total_blocks - a_processed_blocks)
+    )
+    print("Finished a block, progress: {}/{} ({:4.1f}%) ETA: {} (h:m:s)".format(
+        a_processed_blocks,
+        a_total_blocks,
+        a_processed_blocks / a_total_blocks * 100,
+        datetime.timedelta(seconds=seconds_to_finish)),
+    )
 
 
 def quiet_print(a_quiet, a_string, **kwargs):

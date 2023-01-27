@@ -1,13 +1,14 @@
+import datetime
 import subprocess
 import time
+import threading
+import clickhouse_connect
 
 import utils
-import clickhouse_connect
-import threading
 
 command_array = ["python3", "clickhouse_dumper.py"]
 
-NUM_THREADS = 20
+NUM_THREADS = 9
 
 ROOT_FOLDER_PATH = "./data/"
 INTENDED_BATCH_SIZE = 20000
@@ -16,7 +17,7 @@ TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
 HOST = "clickhouse.giant.agtrading.ru"
 PORT = 443
-INSTRUMENTS_WHITE_LIST = ['*']
+INSTRUMENTS_WHITE_LIST = ['INJ_USDT_PERP']
 DATE_WHITE_LIST = ['*']
 QUIET = 1
 USE_GZIP = 1
@@ -79,9 +80,17 @@ for instrument in instruments:
 
     for instrument_date in instrument_dates:
         blocks.append([instrument, instrument_date])
+print()
+
+blocks.reverse()  # to pop from the 'beginning'
+
+total_blocks = len(blocks)
+processed_blocks = 0
 
 
 def launch_thread(a_block):
+    global processed_blocks
+
     command_array_copy = command_array.copy()
     command_array_copy.append("--dump_one_block")
     command_array_copy.extend(a_block)
@@ -92,10 +101,13 @@ def launch_thread(a_block):
 
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8').rstrip())
-    print("Thread for block: {} finished!".format(a_block))
+    processed_blocks += 1
 
 
-blocks.reverse()  # to pop from the 'beginning'
+print("==================================================")
+print("Starting processing of {} blocks in {} threads:".format(total_blocks, NUM_THREADS))
+print("==================================================\n")
+process_blocks_start_time = time.time()
 
 for i in range(NUM_THREADS):
     if len(blocks) == 0:
@@ -104,13 +116,22 @@ for i in range(NUM_THREADS):
     t = threading.Thread(target=launch_thread, args=(block,))
     t.start()
 
-while True:
-    while threading.active_count() > NUM_THREADS:
-        time.sleep(1)
-    if len(blocks) == 0:
-        break
-    block = blocks.pop()
-    t = threading.Thread(target=launch_thread, args=(block,))
-    t.start()
+processed_blocks_registered = 0
 
-print("All threads launched! Waiting for them to finish...")
+# Active wait for threads to finish, launch new threads if any blocks left:
+while True:
+    while processed_blocks_registered == processed_blocks:
+        time.sleep(0.01)
+    processed_blocks_registered = processed_blocks
+    utils.print_progress(total_blocks, processed_blocks, process_blocks_start_time)
+    if processed_blocks == total_blocks:
+        break
+    if len(blocks) > 0:
+        block = blocks.pop()
+        t = threading.Thread(target=launch_thread, args=(block,))
+        t.start()
+
+print("==================================================")
+print("All threads finished! Done in {} (h:m:s).".format(
+    datetime.timedelta(seconds=int(time.time() - process_blocks_start_time))))
+print("==================================================")
