@@ -231,8 +231,10 @@ class Row:
                     self.bids_quantity)
 
     def write_to_files_deduplicated(self, a_prev_event_time, a_buffered_file_writer_set):
-        price_formatter = "{0:0.1f}"
-        quantity_formatter = "{0:0.3f}"
+        # price_formatter = "{0:0.8f}"
+        # quantity_formatter = "{0:0.8f}"
+        price_formatter = "{}"
+        quantity_formatter = "{}"
         if self.event_time != a_prev_event_time:
             a_buffered_file_writer_set.bfw_event_times.write("{}\n".format(self.event_time))
             a_buffered_file_writer_set.bfw_asks_prices.write(
