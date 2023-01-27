@@ -18,6 +18,8 @@ HOST = "clickhouse.giant.agtrading.ru"
 PORT = 443
 INSTRUMENTS_WHITE_LIST = ['*']
 DATE_WHITE_LIST = ['*']
+QUIET = 1
+USE_GZIP = 1
 
 command_array.append("--root_folder_path")
 command_array.append(ROOT_FOLDER_PATH)
@@ -40,7 +42,11 @@ command_array.append(HOST)
 command_array.append("--port")
 command_array.append(str(PORT))
 
-command_array.append("--quiet")
+if QUIET:
+    command_array.append("--quiet")
+
+if USE_GZIP:
+    command_array.append("--use_gzip")
 
 print("Attempting to connect...", end="\t")
 client = clickhouse_connect.get_client(host=HOST, port=PORT, username='default', password='')

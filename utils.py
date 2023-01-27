@@ -1,3 +1,4 @@
+import gzip
 import os
 import glob
 import sys
@@ -180,10 +181,14 @@ def get_block_info(
 
 
 class BufferedFileWriter:
-    def __init__(self, a_file_name):
-        self.file_name = a_file_name
+    def __init__(self, args, a_file_path):
+        self.args = args
+        self.file_path = a_file_path
         self.buffer = ""
-        self.file = open(self.file_name, "w")
+        if self.args.use_gzip:
+            self.file = gzip.open(self.file_path, mode='wb', compresslevel=9)
+        else:
+            self.file = open(self.file_path, "w")
 
     def write(self, a_string):
         self.buffer += a_string
@@ -191,8 +196,10 @@ class BufferedFileWriter:
             self.flush()
 
     def flush(self):
-        # quiet_print(args.quiet, "FLUSHED", file=sys.stderr)
-        self.file.write(self.buffer)
+        if self.args.use_gzip:
+            self.file.write(self.buffer.encode('utf-8'))
+        else:
+            self.file.write(self.buffer)
         self.buffer = ""
 
     def __del__(self):
@@ -201,13 +208,20 @@ class BufferedFileWriter:
 
 
 class BufferedFileWriterSet:
-    def __init__(self, a_directory):
+    def __init__(self, args, a_directory):
         self.directory = a_directory
-        self.bfw_event_times = BufferedFileWriter(os.path.join(self.directory, "event_times.txt"))
-        self.bfw_asks_prices = BufferedFileWriter(os.path.join(self.directory, "asks_prices.txt"))
-        self.bfw_asks_quantities = BufferedFileWriter(os.path.join(self.directory, "asks_quantities.txt"))
-        self.bfw_bids_prices = BufferedFileWriter(os.path.join(self.directory, "bids_prices.txt"))
-        self.bfw_bids_quantities = BufferedFileWriter(os.path.join(self.directory, "bids_quantities.txt"))
+        if args.use_gzip:
+            self.bfw_event_times = BufferedFileWriter(args, os.path.join(self.directory, "event_times.txt.gz"))
+            self.bfw_asks_prices = BufferedFileWriter(args, os.path.join(self.directory, "asks_prices.txt.gz"))
+            self.bfw_asks_quantities = BufferedFileWriter(args, os.path.join(self.directory, "asks_quantities.txt.gz"))
+            self.bfw_bids_prices = BufferedFileWriter(args, os.path.join(self.directory, "bids_prices.txt.gz"))
+            self.bfw_bids_quantities = BufferedFileWriter(args, os.path.join(self.directory, "bids_quantities.txt.gz"))
+        else:
+            self.bfw_event_times = BufferedFileWriter(args, os.path.join(self.directory, "event_times.txt"))
+            self.bfw_asks_prices = BufferedFileWriter(args, os.path.join(self.directory, "asks_prices.txt"))
+            self.bfw_asks_quantities = BufferedFileWriter(args, os.path.join(self.directory, "asks_quantities.txt"))
+            self.bfw_bids_prices = BufferedFileWriter(args, os.path.join(self.directory, "bids_prices.txt"))
+            self.bfw_bids_quantities = BufferedFileWriter(args, os.path.join(self.directory, "bids_quantities.txt"))
 
 
 class Row:
@@ -281,7 +295,7 @@ def process_block(
     purge_folder(args, content_folder_path)
     quiet_print(args.quiet, "Folder purged!\n")
 
-    buffered_file_writer_set = BufferedFileWriterSet(content_folder_path)
+    buffered_file_writer_set = BufferedFileWriterSet(args, content_folder_path)
 
     quiet_print(args.quiet, "Dumping {} batches to files:".format(len(intervals)))
     quiet_print(args.quiet, "------------------------------------")
@@ -289,7 +303,9 @@ def process_block(
     last_event_time = 0
 
     for i in range(len(intervals)):
-        quiet_print(args.quiet, "Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument, a_instrument_date))
+        quiet_print(args.quiet,
+                    "Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument,
+                                                                              a_instrument_date))
         batch_query = get_batch(
             a_client,
             args,
