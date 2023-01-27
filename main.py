@@ -7,9 +7,13 @@ DATABASE = "binance_futures_history"
 TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
 ROOT_FOLDER_PATH = "./data/"
+HOST = "localhost"
+# HOST = "clickhouse.giant.agtrading.ru"
+PORT = 8123
+# PORT = 443
 
 print("Attempting to connect...", end="\t")
-client = clickhouse_connect.get_client(host='clickhouse.giant.agtrading.ru', port=443, username='default', password='')
+client = clickhouse_connect.get_client(host=HOST, port=PORT, username='default', password='')
 print("Connected to ClickHouse!\n")
 
 print("Getting instruments...", end="\t")
