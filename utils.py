@@ -6,10 +6,22 @@ import time
 MAX_BUFFER_LIMIT = 1000000
 
 
-def purge_folder(a_folder_path):
+def quiet_print(a_quiet, a_string, **kwargs):
+    if not a_quiet:
+        print(a_string, **kwargs)
+
+
+def filter_list(a_list, a_whitelist):
+    if a_whitelist == ['*']:
+        return a_list
+    else:
+        return [item for item in a_list if item in a_whitelist]
+
+
+def purge_folder(args, a_folder_path):
     files = glob.glob(a_folder_path + "/*")
     for f in files:
-        print("Found file in destination folder, deleting: {}".format(f))
+        quiet_print(args.quiet, "Found file in destination folder, deleting: {}".format(f))
         os.remove(f)
 
 
@@ -21,10 +33,9 @@ def create_folders(a_folder_path, a_instrument, a_date):
 
 def get_instruments(
         client,
-        a_database,
-        a_table
+        args,
 ):
-    query_get_instruments_string = "SELECT DISTINCT symbol FROM {}.{}".format(a_database, a_table)
+    query_get_instruments_string = "SELECT DISTINCT symbol FROM {}.{}".format(args.database, args.table)
     query_get_instruments_result = client.query(query_get_instruments_string)
     instruments = []
     for row in query_get_instruments_result.result_rows:
@@ -35,12 +46,11 @@ def get_instruments(
 
 def get_instrument_dates(
         client,
-        a_database,
-        a_table,
+        args,
         a_instrument
 ):
-    query_get_instrument_dates_string = "SELECT DISTINCT date FROM {}.{} WHERE symbol = '{}'".format(a_database,
-                                                                                                     a_table,
+    query_get_instrument_dates_string = "SELECT DISTINCT date FROM {}.{} WHERE symbol = '{}'".format(args.database,
+                                                                                                     args.table,
                                                                                                      a_instrument)
     query_get_instrument_dates_result = client.query(query_get_instrument_dates_string)
     dates = []
@@ -52,21 +62,19 @@ def get_instrument_dates(
 
 def get_batch(
         client,
-        a_database,
-        a_table,
-        a_is_snapshot,
+        args,
         a_symbol,
         a_date,
         a_event_time_min,
         a_event_time_max
 ):
-    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
+    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date),
                      "eventTime >= '{}'".format(a_event_time_min),
                      "eventTime <= '{}'".format(a_event_time_max)]
 
-    query_get_batch_string = "SELECT * FROM {}.{} WHERE {} LIMIT {}".format(a_database, a_table,
+    query_get_batch_string = "SELECT * FROM {}.{} WHERE {} LIMIT {}".format(args.database, args.table,
                                                                             " AND ".join(query_filters),
                                                                             MAX_BUFFER_LIMIT)
 
@@ -75,36 +83,34 @@ def get_batch(
     query = client.query(query_get_batch_string)
     # force deflate (for accurate benchmarking) and check if buffer limit reached
     if len(query.result_rows) == MAX_BUFFER_LIMIT:
-        print("Buffer limit reached!", file=sys.stderr)
+        quiet_print(args.quiet, "Buffer limit reached!", file=sys.stderr)
 
     query_end_time = time.time()
 
-    print("\tBatch fetch time: {0:0.3f} s".format(query_end_time - query_start_time))
-    print("\ta_event_time_min: {}".format(a_event_time_min))
-    print("\ta_event_time_max: {}".format(a_event_time_max))
-    print("\tGot rows: {}".format(int(query.summary['result_rows'])))
-    print("\tResult size: {0:0.3f} Mb".format(int(query.summary['result_bytes']) // 1024 / 1024))
-    # print("\tResult summary: {}".format(result.summary))
+    quiet_print(args.quiet, "\tBatch fetch time: {0:0.3f} s".format(query_end_time - query_start_time))
+    # quiet_print(args.quiet, "\ta_event_time_min: {}".format(a_event_time_min))
+    # quiet_print(args.quiet, "\ta_event_time_max: {}".format(a_event_time_max))
+    quiet_print(args.quiet, "\tGot rows: {}".format(int(query.summary['result_rows'])))
+    quiet_print(args.quiet, "\tResult size: {0:0.3f} Mb".format(int(query.summary['result_bytes']) // 1024 / 1024))
+    # quiet_print(args.quiet, "\tResult summary: {}".format(result.summary))
 
     return query
 
 
 def get_min_max_event_time(
         client,
-        a_database,
-        a_table,
-        a_is_snapshot,
+        args,
         a_symbol,
         a_date
 ):
-    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
+    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date)]
 
-    query_get_min_event_time_string = "SELECT min(eventTime) FROM {}.{} WHERE {}".format(a_database, a_table,
+    query_get_min_event_time_string = "SELECT min(eventTime) FROM {}.{} WHERE {}".format(args.database, args.table,
                                                                                          " AND ".join(query_filters))
 
-    query_get_max_event_time_string = "SELECT max(eventTime) FROM {}.{} WHERE {}".format(a_database, a_table,
+    query_get_max_event_time_string = "SELECT max(eventTime) FROM {}.{} WHERE {}".format(args.database, args.table,
                                                                                          " AND ".join(query_filters))
 
     query_get_min_event_time_result = client.query(query_get_min_event_time_string)
@@ -115,17 +121,15 @@ def get_min_max_event_time(
 
 def get_count_rows(
         client,
-        a_database,
-        a_table,
-        a_is_snapshot,
+        args,
         a_symbol,
         a_date
 ):
-    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
+    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date)]
 
-    query_get_count_row_string = "SELECT count() FROM {}.{} WHERE {}".format(a_database, a_table,
+    query_get_count_row_string = "SELECT count() FROM {}.{} WHERE {}".format(args.database, args.table,
                                                                              " AND ".join(query_filters))
 
     return client.query(query_get_count_row_string).result_rows[0][0]
@@ -153,7 +157,7 @@ class BlockInfo:
 
         for i in range(self.min_event_time - 1, self.max_event_time + 1, batch_time_interval):
             intervals.append([i, i + batch_time_interval])
-            # print("{} - {}".format(intervals[-1][0], intervals[-1][1]))
+            # quiet_print(args.quiet, "{} - {}".format(intervals[-1][0], intervals[-1][1]))
 
         # check correctness of intervals:
         assert intervals[0][0] < self.min_event_time
@@ -164,14 +168,12 @@ class BlockInfo:
 
 def get_block_info(
         client,
-        a_database,
-        a_table,
-        a_is_snapshot,
+        args,
         a_symbol,
         a_date
 ):
-    min_max_event_time = get_min_max_event_time(client, a_database, a_table, a_is_snapshot, a_symbol, a_date)
-    count_rows = get_count_rows(client, a_database, a_table, a_is_snapshot, a_symbol, a_date)
+    min_max_event_time = get_min_max_event_time(client, args, a_symbol, a_date)
+    count_rows = get_count_rows(client, args, a_symbol, a_date)
 
     return BlockInfo(min_max_event_time[0], min_max_event_time[1], count_rows)
 
@@ -188,7 +190,7 @@ class BufferedFileWriter:
             self.flush()
 
     def flush(self):
-        # print("FLUSHED", file=sys.stderr)
+        # quiet_print(args.quiet, "FLUSHED", file=sys.stderr)
         self.file.write(self.buffer)
         self.buffer = ""
 
@@ -247,3 +249,76 @@ class Row:
                 "{}\n".format(" ".join(quantity_formatter.format(bid_quantity) for bid_quantity in self.bids_quantity)))
             return 1
         return 0
+
+
+def process_block(
+        a_client,
+        args,
+        a_instrument,
+        a_instrument_date
+):
+    quiet_print(args.quiet, "==================================================")
+    quiet_print(args.quiet, "Instrument: {0:20} Date: {1:10}".format(a_instrument, a_instrument_date))
+    quiet_print(args.quiet, "==================================================\n")
+    process_block_start_time = time.time()
+
+    content_folder_path = create_folders(args.root_folder_path, a_instrument, a_instrument_date)
+    quiet_print(args.quiet, "Content folder path: {}\n".format(content_folder_path))
+
+    block_info = get_block_info(
+        a_client,
+        args,
+        a_instrument,
+        a_instrument_date
+    )
+
+    quiet_print(args.quiet, "Block info:\n{}\n".format(block_info))
+
+    intervals = block_info.get_intervals(args.intended_batch_size)
+
+    quiet_print(args.quiet, "Purging folder contents: {}".format(content_folder_path))
+    purge_folder(args, content_folder_path)
+    quiet_print(args.quiet, "Folder purged!\n")
+
+    buffered_file_writer_set = BufferedFileWriterSet(content_folder_path)
+
+    quiet_print(args.quiet, "Dumping {} batches to files:".format(len(intervals)))
+    quiet_print(args.quiet, "------------------------------------")
+
+    last_event_time = 0
+
+    for i in range(len(intervals)):
+        print("Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument, a_instrument_date))
+        batch_query = get_batch(
+            a_client,
+            args,
+            a_instrument,
+            a_instrument_date,
+            intervals[i][0],
+            intervals[i][1]
+        )
+        quiet_print(args.quiet, "Processing batch...")
+        processing_start_time = time.time()
+
+        rows = []
+        for row in batch_query.result_rows:
+            rows.append(Row(row[5], row[8], row[9], row[10], row[11]))
+        rows.sort()
+
+        count_row_written = 0
+
+        for row in rows:
+            count_row_written += row.write_to_files_deduplicated(last_event_time, buffered_file_writer_set)
+            last_event_time = row.event_time
+
+        processing_end_time = time.time()
+        quiet_print(args.quiet, "\tBatch processing time: {0:0.3f} s (wrote: {1} rows)".format(
+            processing_end_time - processing_start_time,
+            count_row_written))
+        quiet_print(args.quiet, "------------------------------------")
+
+    process_block_end_time = time.time()
+    quiet_print(args.quiet, "==================================================")
+    quiet_print(args.quiet,
+                "Total block processing time: {0:0.3f} s".format(process_block_end_time - process_block_start_time))
+    quiet_print(args.quiet, "==================================================\n")
