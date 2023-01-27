@@ -9,6 +9,7 @@ MAX_BUFFER_LIMIT = 1000000
 def quiet_print(a_quiet, a_string, **kwargs):
     if not a_quiet:
         print(a_string, **kwargs)
+        sys.stdout.flush()
 
 
 def filter_list(a_list, a_whitelist):
@@ -288,7 +289,7 @@ def process_block(
     last_event_time = 0
 
     for i in range(len(intervals)):
-        print("Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument, a_instrument_date))
+        quiet_print(args.quiet, "Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument, a_instrument_date))
         batch_query = get_batch(
             a_client,
             args,
