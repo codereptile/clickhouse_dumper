@@ -4,8 +4,32 @@ import os
 import glob
 import sys
 import time
+import random
 
 MAX_BUFFER_LIMIT = 1000000
+
+def make_red(a_string):
+    return "\033[91m{}\033[00m".format(a_string)
+
+def magic_number_verify():
+    magic_number = random.randint(1e9 + 1, 1e10 - 1)  # 10 digits
+    print("Type the magic number '{}' to continue:".format(magic_number))
+    answer = input()
+    if answer != str(magic_number):
+        print("Aborting!")
+        exit(1)
+
+def clear_table_by_date(client, a_database, a_table, a_date_until):
+    query_string = "ALTER TABLE {}.{} DELETE WHERE date < '{}'".format(a_database, a_table, a_date_until)
+    client.query(query_string)
+
+
+class FakeArgs:
+    def __init__(self, database, table, is_snapshot, a_quiet=False):
+        self.database = database
+        self.table = table
+        self.is_snapshot = is_snapshot
+        self.quiet = a_quiet
 
 
 def print_progress(a_total_blocks, a_processed_blocks, process_blocks_start_time):
@@ -45,6 +69,19 @@ def create_folders(a_folder_path, a_instrument, a_date):
     destination_folder = os.path.join(a_folder_path, str(a_instrument), str(a_date))
     os.makedirs(destination_folder, exist_ok=True)
     return destination_folder
+
+
+def get_tables(
+        client,
+        a_database
+):
+    query_get_tables_string = "SHOW TABLES IN {}".format(a_database)
+    query_get_tables_result = client.query(query_get_tables_string)
+    tables = []
+    for row in query_get_tables_result.result_rows:
+        tables.append(row[0])
+    tables.sort()
+    return tables
 
 
 def get_instruments(

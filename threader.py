@@ -8,7 +8,7 @@ import utils
 
 command_array = ["python3", "clickhouse_dumper.py"]
 
-NUM_THREADS = 9
+NUM_THREADS = 20
 
 ROOT_FOLDER_PATH = "./data/"
 INTENDED_BATCH_SIZE = 20000
@@ -55,16 +55,7 @@ print("Connected to ClickHouse!\n")
 
 print("Getting instruments...", end="\t")
 
-
-class FakeArgs:
-    def __init__(self, database, table, is_snapshot, a_quiet=False):
-        self.database = database
-        self.table = table
-        self.is_snapshot = is_snapshot
-        self.quiet = a_quiet
-
-
-args = FakeArgs(DATABASE, TABLE, IS_SNAPSHOT)
+args = utils.FakeArgs(DATABASE, TABLE, IS_SNAPSHOT)
 
 instruments = utils.get_instruments(client, args)
 instruments = utils.filter_list(instruments, INSTRUMENTS_WHITE_LIST)
@@ -104,9 +95,9 @@ def launch_thread(a_block):
     processed_blocks += 1
 
 
-print("==================================================")
-print("Starting processing of {} blocks in {} threads:".format(total_blocks, NUM_THREADS))
-print("==================================================\n")
+print("===================================================================")
+print("Starting processing of {} blocks in up to {} threads:".format(total_blocks, NUM_THREADS))
+print("===================================================================\n")
 process_blocks_start_time = time.time()
 
 for i in range(NUM_THREADS):
@@ -115,6 +106,7 @@ for i in range(NUM_THREADS):
     block = blocks.pop()
     t = threading.Thread(target=launch_thread, args=(block,))
     t.start()
+    time.sleep(0.1)
 
 processed_blocks_registered = 0
 
@@ -131,7 +123,7 @@ while True:
         t = threading.Thread(target=launch_thread, args=(block,))
         t.start()
 
-print("==================================================")
+print("===================================================================")
 print("All threads finished! Done in {} (h:m:s).".format(
     datetime.timedelta(seconds=int(time.time() - process_blocks_start_time))))
-print("==================================================")
+print("===================================================================")
