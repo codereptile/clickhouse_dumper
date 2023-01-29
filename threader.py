@@ -18,7 +18,7 @@ IS_SNAPSHOT = 1
 HOST = "clickhouse.giant.agtrading.ru"
 PORT = 443
 INSTRUMENTS_WHITE_LIST = ['INJ_USDT_PERP']
-DATE_WHITE_LIST = ['*']
+DATE_WHITE_LIST = ['.*']
 QUIET = 1
 USE_GZIP = 1
 
@@ -58,7 +58,7 @@ print("Getting instruments...", end="\t")
 args = utils.FakeArgs(DATABASE, TABLE, IS_SNAPSHOT)
 
 instruments = utils.get_instruments(client, args)
-instruments = utils.filter_list(instruments, INSTRUMENTS_WHITE_LIST)
+instruments = utils.filter_list_whitelist(instruments, INSTRUMENTS_WHITE_LIST)
 print("Got {} instruments after filtering!\n".format(len(instruments)))
 
 blocks = []
@@ -66,7 +66,7 @@ blocks = []
 for instrument in instruments:
     print("Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
     instrument_dates = utils.get_instrument_dates(client, args, instrument)
-    instrument_dates = utils.filter_list(instrument_dates, DATE_WHITE_LIST)
+    instrument_dates = utils.filter_list_whitelist(instrument_dates, DATE_WHITE_LIST)
     print("Got {} dates after filtering!".format(len(instrument_dates)))
 
     for instrument_date in instrument_dates:

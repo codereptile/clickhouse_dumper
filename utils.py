@@ -2,14 +2,98 @@ import datetime
 import gzip
 import os
 import glob
+import re
 import sys
 import time
 import random
 
 MAX_BUFFER_LIMIT = 1000000
 
+
+def pretty_print_number(a_number):
+    if a_number < 1e3:
+        return str(a_number)
+    elif a_number < 1e6:
+        return "{:.2f} K".format(a_number / 1e3)
+    elif a_number < 1e9:
+        return "{:.2f} M".format(a_number / 1e6)
+    elif a_number < 1e12:
+        return "{:.2f} B".format(a_number / 1e9)
+
+
+class TableInfo:
+    def __init__(self, a_database, a_table):
+        self.database_name = a_database
+        self.table_name = a_table
+
+        self.size_on_disk = None
+        self.size_compressed = None
+        self.size_uncompressed = None
+        self.rows = None
+
+    def get_info(self, a_client):
+        query_get_table_info_string = """SELECT
+    formatReadableSize(sum(bytes_on_disk)) AS size_on_disk,
+    formatReadableSize(sum(data_compressed_bytes)) AS size_compressed,
+    formatReadableSize(sum(data_uncompressed_bytes)) AS size_uncompressed,
+    sum(rows) AS rows
+FROM system.parts
+WHERE active AND database='{}' and table='{}'""".format(self.database_name, self.table_name)
+
+        query_get_table_info_result = a_client.query(query_get_table_info_string)
+        self.size_on_disk = query_get_table_info_result.result_rows[0][0]
+        self.size_compressed = query_get_table_info_result.result_rows[0][1]
+        self.size_uncompressed = query_get_table_info_result.result_rows[0][2]
+        self.rows = int(query_get_table_info_result.result_rows[0][3])
+
+    def __lt__(self, other):
+        return self.size_on_disk > other.size_on_disk
+
+
+class DatabaseInfo:
+    def __init__(self, a_database):
+        self.database_name = a_database
+        self.tables = []
+
+    def get_info(self, a_client):
+        for table in get_tables(a_client, self.database_name):
+            self.tables.append(TableInfo(self.database_name, table))
+            self.tables[-1].get_info(a_client)
+
+        self.tables.sort()
+
+    def print(self, a_hide_empty_tables):
+        table_string = ""
+        for table in self.tables:
+            if table.rows == 0 and a_hide_empty_tables:
+                continue
+            table_string += "{:35}|{:^15}|{:^15}|{:^15}|{:^15}|\n".format(
+                table.table_name,
+                table.size_on_disk,
+                table.size_compressed,
+                table.size_uncompressed,
+                pretty_print_number(table.rows),
+            )
+        table_width = 100
+        output = ("{:^" + str(table_width) + "}\n").format(self.database_name)
+        output += "-" * table_width + "\n"
+        output += "{:35}|{:^15}|{:^15}|{:^15}|{:^15}|\n".format(
+            "Table",
+            "On disk",
+            "Compressed",
+            "Uncompressed",
+            "Rows",
+        )
+        output += "-" * table_width + "\n"
+        output += table_string
+        output += "-" * table_width + "\n"
+
+        print(output)
+
+
 def make_red(a_string):
     return "\033[91m{}\033[00m".format(a_string)
+
 
 def magic_number_verify():
     magic_number = random.randint(1e9 + 1, 1e10 - 1)  # 10 digits
@@ -18,6 +102,7 @@ def magic_number_verify():
     if answer != str(magic_number):
         print("Aborting!")
         exit(1)
+
 
 def clear_table_by_date(client, a_database, a_table, a_date_until):
     query_string = "ALTER TABLE {}.{} DELETE WHERE date < '{}'".format(a_database, a_table, a_date_until)
@@ -51,11 +136,25 @@ def quiet_print(a_quiet, a_string, **kwargs):
         sys.stdout.flush()
 
 
-def filter_list(a_list, a_whitelist):
-    if a_whitelist == ['*']:
-        return a_list
-    else:
-        return [item for item in a_list if item in a_whitelist]
+def filter_list_whitelist(a_list, a_whitelist):
+    output_list = []
+    for item in a_list:
+        for regex_string in a_whitelist:
+            if re.match(re.compile(regex_string), item) is not None:
+                output_list.append(item)
+                break
+    return output_list
+
+
+def filter_list_blacklist(a_list, a_blacklist):
+    output_list = []
+    for item in a_list:
+        for regex_string in a_blacklist:
+            if re.match(re.compile(regex_string), item) is not None:
+                break
+        else:
+            output_list.append(item)
+    return output_list
 
 
 def purge_folder(args, a_folder_path):
@@ -69,6 +168,18 @@ def create_folders(a_folder_path, a_instrument, a_date):
     destination_folder = os.path.join(a_folder_path, str(a_instrument), str(a_date))
     os.makedirs(destination_folder, exist_ok=True)
     return destination_folder
+
+
+def get_databases(
+        client
+):
+    query_get_databases_string = "SHOW DATABASES"
+    query_get_databases_result = client.query(query_get_databases_string)
+    databases = []
+    for row in query_get_databases_result.result_rows:
+        databases.append(row[0])
+    databases.sort()
+    return databases
 
 
 def get_tables(

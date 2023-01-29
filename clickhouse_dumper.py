@@ -11,8 +11,8 @@ parser.add_argument("--is_snapshot", dest="is_snapshot", default=1, nargs='?')
 parser.add_argument("--host", dest="host", default="clickhouse.giant.agtrading.ru", nargs='?')
 parser.add_argument("--port", dest="port", default=443, nargs='?', type=int)
 parser.add_argument("--dump_one_block", dest="dump_one_block", default=None, nargs='+')
-parser.add_argument("--instrument_white_list", dest="instrument_white_list", default=['*'], nargs='+')
-parser.add_argument("--date_white_list", dest="date_white_list", default=['*'], nargs='+')
+parser.add_argument("--instrument_white_list", dest="instrument_white_list", default=['.*'], nargs='+')
+parser.add_argument("--date_white_list", dest="date_white_list", default=['.*'], nargs='+')
 parser.add_argument("--quiet", dest="quiet", const=1, default=0, nargs='?')
 parser.add_argument("--use_gzip", dest="use_gzip", const=1, default=0, nargs='?')
 args = parser.parse_args()
@@ -43,14 +43,14 @@ if args.dump_one_block is None:
     utils.quiet_print(args.quiet, "Getting instruments...", end="\t")
     instruments = utils.get_instruments(client, args)
     # utils.quiet_print(args.quiet, "Got {} instruments!".format(len(instruments)), end="\t")
-    instruments = utils.filter_list(instruments, args.instrument_white_list)
+    instruments = utils.filter_list_whitelist(instruments, args.instrument_white_list)
     utils.quiet_print(args.quiet, "Got {} instruments after filtering!\n".format(len(instruments)))
 
     for instrument in instruments:
         utils.quiet_print(args.quiet, "Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
         instrument_dates = utils.get_instrument_dates(client, args, instrument)
         # utils.quiet_print(args.quiet, "Got {} dates!".format(len(instrument_dates)), end="\t")
-        instrument_dates = utils.filter_list(instrument_dates, args.date_white_list)
+        instrument_dates = utils.filter_list_whitelist(instrument_dates, args.date_white_list)
         utils.quiet_print(args.quiet, "Got {} dates after filtering!".format(len(instrument_dates)))
 
         for instrument_date in instrument_dates:
