@@ -532,16 +532,23 @@ def process_block(
         quiet_print(args.quiet,
                     "Getting batch {} of {} (Instrument: {} Date: {})".format(i + 1, len(intervals), a_instrument,
                                                                               a_instrument_date))
-        batch_query = get_batch(
-            a_client,
-            args.database,
-            args.table,
-            args.is_snapshot,
-            a_instrument,
-            a_instrument_date,
-            intervals[i][0],
-            intervals[i][1]
-        )
+        while True:
+            try:
+                batch_query = get_batch(
+                    a_client,
+                    args.database,
+                    args.table,
+                    args.is_snapshot,
+                    a_instrument,
+                    a_instrument_date,
+                    intervals[i][0],
+                    intervals[i][1]
+                )
+            except Exception as e:
+                quiet_print(args.quiet, "Exception: {}".format(e))
+                quiet_print(args.quiet, "Retrying...")
+                continue
+            break
         quiet_print(args.quiet, "Processing batch...")
         processing_start_time = time.time()
 

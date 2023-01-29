@@ -82,10 +82,12 @@ def launch_thread(a_block):
 
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8').rstrip())
-    while (p.poll() is None):
+    while p.poll() is None:
         time.sleep(0.1)
     if p.returncode != 0:
-        print(utils.make_red("Error while processing block: Instrument: {}, Date: {}, return code: {}".format(a_block[0], a_block[1], p.returncode)))
+        print(utils.make_red(
+            "Error while processing block: Instrument: {}, Date: {}, return code: {}".format(a_block[0], a_block[1],
+                                                                                             p.returncode)))
         count_errors += 1
     processed_blocks += 1
 
