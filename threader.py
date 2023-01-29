@@ -10,15 +10,15 @@ import utils
 # CONFIG
 JUST_PRINT = 0
 
-NUM_THREADS = 20
+NUM_THREADS = 30
 INTENDED_BATCH_SIZE = 20000
 
-ROOT_FOLDER_PATH = "./data/"
+ROOT_FOLDER_PATH = "./binance_futures_history_BTC_ETH_BNB_01.26-01.28/"
 
 DATABASE = "binance_futures_history"
 TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
-INSTRUMENTS_WHITE_LIST = ['INJ_USDT_PERP', 'LIT_USDT_PERP']
+INSTRUMENTS_WHITE_LIST = ['BTC_USDT_PERP', 'ETH_USDT_PERP', 'BNB_USDT_PERP']
 DATE_WHITE_LIST = ['.*']
 
 HOST = "clickhouse.giant.agtrading.ru"
@@ -82,9 +82,10 @@ def launch_thread(a_block):
 
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8').rstrip())
-    p.poll()
+    while (p.poll() is None):
+        time.sleep(0.1)
     if p.returncode != 0:
-        print(utils.make_red("Error while processing block: Instrument: {}, Date: {}".format(a_block[0], a_block[1])))
+        print(utils.make_red("Error while processing block: Instrument: {}, Date: {}, return code: {}".format(a_block[0], a_block[1], p.returncode)))
         count_errors += 1
     processed_blocks += 1
 
@@ -136,7 +137,7 @@ while True:
         t = threading.Thread(target=launch_thread, args=(block,))
         t.start()
 
-print("====================================================================================================\n")
+print("====================================================================================================")
 if count_errors > 0:
     print(utils.make_red("Finished with {} errors!".format(count_errors)))
 print("All threads finished! Done in {} (h:m:s).".format(
