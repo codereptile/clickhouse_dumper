@@ -41,14 +41,14 @@ utils.quiet_print(args.quiet, "Connected to ClickHouse!\n")
 blocks = []
 if args.dump_one_block is None:
     utils.quiet_print(args.quiet, "Getting instruments...", end="\t")
-    instruments = utils.get_instruments(client, args)
+    instruments = utils.get_instruments(client, args.database, args.table)
     # utils.quiet_print(args.quiet, "Got {} instruments!".format(len(instruments)), end="\t")
     instruments = utils.filter_list_whitelist(instruments, args.instrument_white_list)
     utils.quiet_print(args.quiet, "Got {} instruments after filtering!\n".format(len(instruments)))
 
     for instrument in instruments:
         utils.quiet_print(args.quiet, "Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
-        instrument_dates = utils.get_instrument_dates(client, args, instrument)
+        instrument_dates = utils.get_instrument_dates(client, args.database, args.table, instrument)
         # utils.quiet_print(args.quiet, "Got {} dates!".format(len(instrument_dates)), end="\t")
         instrument_dates = utils.filter_list_whitelist(instrument_dates, args.date_white_list)
         utils.quiet_print(args.quiet, "Got {} dates after filtering!".format(len(instrument_dates)))

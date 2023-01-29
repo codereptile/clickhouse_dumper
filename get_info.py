@@ -1,5 +1,3 @@
-import re
-
 import clickhouse_connect
 import utils
 
@@ -32,7 +30,7 @@ for database in utils.filter_list_blacklist(databases, DATABASES_BLACKLIST):
 print("Got {} databases!\n".format(len(databases_info)))
 
 for database in databases_info:
-    print("Getting info for database {:30}".format(database.database_name), end="\t")
+    print("Getting info for database: {:30}".format(database.database_name + "..."), end="\t")
     database.get_info(client)
     print("Done!")
 

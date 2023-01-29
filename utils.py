@@ -95,8 +95,48 @@ def make_red(a_string):
     return "\033[91m{}\033[00m".format(a_string)
 
 
+def print_instrument_dates_table(a_instrument_dates):
+    all_dates_are_equal = True
+
+    prev_dates = None
+    for instrument in a_instrument_dates:
+        if prev_dates is None:
+            prev_dates = a_instrument_dates[instrument]
+            continue
+        if prev_dates != a_instrument_dates[instrument]:
+            all_dates_are_equal = False
+            break
+
+    if all_dates_are_equal:
+        print("{:^100}".format("Dates for all instruments are equal!"))
+    else:
+        print(make_red("{:^100}".format("!WARNING!     Dates for all instruments are NOT equal     !WARNING!")))
+    print("-" * 100)
+    print("{:^19}|{:^79}|".format("Instrument", "Dates"))
+    print("-" * 100)
+    for instrument in a_instrument_dates:
+        table_line = "{:19}| ".format(instrument)
+
+        dates = a_instrument_dates[instrument]
+        current_date_id = 0
+        while current_date_id < len(dates):
+            table_line += " {:^10}  ".format(dates[current_date_id])
+            if (current_date_id + 1) % 6 == 0:
+                table_line += "|"
+                print(table_line)
+                table_line = " " * 19 + "| "
+            current_date_id += 1
+        print(table_line + " " * (100 - len(table_line) - 1) + "|")
+        print("-" * 100)
+
+    if all_dates_are_equal:
+        print("{:^100}".format("Dates for all instruments are equal!"))
+    else:
+        print(make_red("{:^100}".format("!WARNING!     Dates for all instruments are NOT equal     !WARNING!")))
+
+
 def magic_number_verify():
-    magic_number = random.randint(1e9 + 1, 1e10 - 1)  # 10 digits
+    magic_number = random.randint(int(1e9 + 1), int(1e10 - 1))  # 10 digits
     print("Type the magic number '{}' to continue:".format(magic_number))
     answer = input()
     if answer != str(magic_number):
@@ -107,14 +147,6 @@ def magic_number_verify():
 def clear_table_by_date(client, a_database, a_table, a_date_until):
     query_string = "ALTER TABLE {}.{} DELETE WHERE date < '{}'".format(a_database, a_table, a_date_until)
     client.query(query_string)
-
-
-class FakeArgs:
-    def __init__(self, database, table, is_snapshot, a_quiet=False):
-        self.database = database
-        self.table = table
-        self.is_snapshot = is_snapshot
-        self.quiet = a_quiet
 
 
 def print_progress(a_total_blocks, a_processed_blocks, process_blocks_start_time):
@@ -157,10 +189,10 @@ def filter_list_blacklist(a_list, a_blacklist):
     return output_list
 
 
-def purge_folder(args, a_folder_path):
+def purge_folder(a_quiet, a_folder_path):
     files = glob.glob(a_folder_path + "/*")
     for f in files:
-        quiet_print(args.quiet, "Found file in destination folder, deleting: {}".format(f))
+        quiet_print(a_quiet, "Found file in destination folder, deleting: {}".format(f))
         os.remove(f)
 
 
@@ -197,9 +229,10 @@ def get_tables(
 
 def get_instruments(
         client,
-        args,
+        a_database,
+        a_table
 ):
-    query_get_instruments_string = "SELECT DISTINCT symbol FROM {}.{}".format(args.database, args.table)
+    query_get_instruments_string = "SELECT DISTINCT symbol FROM {}.{}".format(a_database, a_table)
     query_get_instruments_result = client.query(query_get_instruments_string)
     instruments = []
     for row in query_get_instruments_result.result_rows:
@@ -210,12 +243,13 @@ def get_instruments(
 
 def get_instrument_dates(
         client,
-        args,
+        a_database,
+        a_table,
         a_instrument
 ):
-    query_get_instrument_dates_string = "SELECT DISTINCT date FROM {}.{} WHERE symbol = '{}'".format(args.database,
-                                                                                                     args.table,
-                                                                                                     a_instrument)
+    query_get_instrument_dates_string = "SELECT DISTINCT date FROM {}.{} WHERE symbol = '{}'".format(
+        a_database, a_table, a_instrument
+    )
     query_get_instrument_dates_result = client.query(query_get_instrument_dates_string)
     dates = []
     for row in query_get_instrument_dates_result.result_rows:
@@ -226,19 +260,21 @@ def get_instrument_dates(
 
 def get_batch(
         client,
-        args,
+        a_database,
+        a_table,
+        a_is_snapshot,
         a_symbol,
         a_date,
         a_event_time_min,
         a_event_time_max
 ):
-    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
+    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date),
                      "eventTime >= '{}'".format(a_event_time_min),
                      "eventTime <= '{}'".format(a_event_time_max)]
 
-    query_get_batch_string = "SELECT * FROM {}.{} WHERE {} LIMIT {}".format(args.database, args.table,
+    query_get_batch_string = "SELECT * FROM {}.{} WHERE {} LIMIT {}".format(a_database, a_table,
                                                                             " AND ".join(query_filters),
                                                                             MAX_BUFFER_LIMIT)
 
@@ -247,15 +283,15 @@ def get_batch(
     query = client.query(query_get_batch_string)
     # force deflate (for accurate benchmarking) and check if buffer limit reached
     if len(query.result_rows) == MAX_BUFFER_LIMIT:
-        quiet_print(args.quiet, "Buffer limit reached!", file=sys.stderr)
+        print("Buffer limit reached!", file=sys.stderr)
 
     query_end_time = time.time()
 
-    quiet_print(args.quiet, "\tBatch fetch time: {0:0.3f} s".format(query_end_time - query_start_time))
+    # quiet_print(args.quiet, "\tBatch fetch time: {0:0.3f} s".format(query_end_time - query_start_time))
     # quiet_print(args.quiet, "\ta_event_time_min: {}".format(a_event_time_min))
     # quiet_print(args.quiet, "\ta_event_time_max: {}".format(a_event_time_max))
-    quiet_print(args.quiet, "\tGot rows: {}".format(int(query.summary['result_rows'])))
-    quiet_print(args.quiet, "\tResult size: {0:0.3f} Mb".format(int(query.summary['result_bytes']) // 1024 / 1024))
+    # quiet_print(args.quiet, "\tGot rows: {}".format(int(query.summary['result_rows'])))
+    # quiet_print(args.quiet, "\tResult size: {0:0.3f} Mb".format(int(query.summary['result_bytes']) // 1024 / 1024))
     # quiet_print(args.quiet, "\tResult summary: {}".format(result.summary))
 
     return query
@@ -263,18 +299,20 @@ def get_batch(
 
 def get_min_max_event_time(
         client,
-        args,
+        a_database,
+        a_table,
+        a_is_snapshot,
         a_symbol,
-        a_date
+        a_date,
 ):
-    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
+    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date)]
 
-    query_get_min_event_time_string = "SELECT min(eventTime) FROM {}.{} WHERE {}".format(args.database, args.table,
+    query_get_min_event_time_string = "SELECT min(eventTime) FROM {}.{} WHERE {}".format(a_database, a_table,
                                                                                          " AND ".join(query_filters))
 
-    query_get_max_event_time_string = "SELECT max(eventTime) FROM {}.{} WHERE {}".format(args.database, args.table,
+    query_get_max_event_time_string = "SELECT max(eventTime) FROM {}.{} WHERE {}".format(a_database, a_table,
                                                                                          " AND ".join(query_filters))
 
     query_get_min_event_time_result = client.query(query_get_min_event_time_string)
@@ -285,15 +323,17 @@ def get_min_max_event_time(
 
 def get_count_rows(
         client,
-        args,
+        a_database,
+        a_table,
+        a_is_snapshot,
         a_symbol,
-        a_date
+        a_date,
 ):
-    query_filters = ["isSnapshot = {}".format(args.is_snapshot),
+    query_filters = ["isSnapshot = {}".format(a_is_snapshot),
                      "symbol = '{}'".format(a_symbol),
                      "date = '{}'".format(a_date)]
 
-    query_get_count_row_string = "SELECT count() FROM {}.{} WHERE {}".format(args.database, args.table,
+    query_get_count_row_string = "SELECT count() FROM {}.{} WHERE {}".format(a_database, a_table,
                                                                              " AND ".join(query_filters))
 
     return client.query(query_get_count_row_string).result_rows[0][0]
@@ -332,22 +372,24 @@ class BlockInfo:
 
 def get_block_info(
         client,
-        args,
+        a_database,
+        a_table,
+        a_is_snapshot,
         a_symbol,
-        a_date
+        a_date,
 ):
-    min_max_event_time = get_min_max_event_time(client, args, a_symbol, a_date)
-    count_rows = get_count_rows(client, args, a_symbol, a_date)
+    min_max_event_time = get_min_max_event_time(client, a_database, a_table, a_is_snapshot, a_symbol, a_date)
+    count_rows = get_count_rows(client, a_database, a_table, a_is_snapshot, a_symbol, a_date)
 
     return BlockInfo(min_max_event_time[0], min_max_event_time[1], count_rows)
 
 
 class BufferedFileWriter:
-    def __init__(self, args, a_file_path):
-        self.args = args
+    def __init__(self, a_use_gzip, a_file_path):
+        self.use_gzip = a_use_gzip
         self.file_path = a_file_path
         self.buffer = ""
-        if self.args.use_gzip:
+        if self.use_gzip:
             self.file = gzip.open(self.file_path, mode='wb', compresslevel=9)
         else:
             self.file = open(self.file_path, "w")
@@ -358,7 +400,7 @@ class BufferedFileWriter:
             self.flush()
 
     def flush(self):
-        if self.args.use_gzip:
+        if self.use_gzip:
             self.file.write(self.buffer.encode('utf-8'))
         else:
             self.file.write(self.buffer)
@@ -370,20 +412,40 @@ class BufferedFileWriter:
 
 
 class BufferedFileWriterSet:
-    def __init__(self, args, a_directory):
+    def __init__(self, a_use_gzip, a_directory):
         self.directory = a_directory
-        if args.use_gzip:
-            self.bfw_event_times = BufferedFileWriter(args, os.path.join(self.directory, "event_times.txt.gz"))
-            self.bfw_asks_prices = BufferedFileWriter(args, os.path.join(self.directory, "asks_prices.txt.gz"))
-            self.bfw_asks_quantities = BufferedFileWriter(args, os.path.join(self.directory, "asks_quantities.txt.gz"))
-            self.bfw_bids_prices = BufferedFileWriter(args, os.path.join(self.directory, "bids_prices.txt.gz"))
-            self.bfw_bids_quantities = BufferedFileWriter(args, os.path.join(self.directory, "bids_quantities.txt.gz"))
+        if a_use_gzip:
+            self.bfw_event_times = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "event_times.txt.gz")
+            )
+            self.bfw_asks_prices = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "asks_prices.txt.gz")
+            )
+            self.bfw_asks_quantities = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "asks_quantities.txt.gz")
+            )
+            self.bfw_bids_prices = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "bids_prices.txt.gz")
+            )
+            self.bfw_bids_quantities = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "bids_quantities.txt.gz")
+            )
         else:
-            self.bfw_event_times = BufferedFileWriter(args, os.path.join(self.directory, "event_times.txt"))
-            self.bfw_asks_prices = BufferedFileWriter(args, os.path.join(self.directory, "asks_prices.txt"))
-            self.bfw_asks_quantities = BufferedFileWriter(args, os.path.join(self.directory, "asks_quantities.txt"))
-            self.bfw_bids_prices = BufferedFileWriter(args, os.path.join(self.directory, "bids_prices.txt"))
-            self.bfw_bids_quantities = BufferedFileWriter(args, os.path.join(self.directory, "bids_quantities.txt"))
+            self.bfw_event_times = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "event_times.txt")
+            )
+            self.bfw_asks_prices = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "asks_prices.txt")
+            )
+            self.bfw_asks_quantities = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "asks_quantities.txt")
+            )
+            self.bfw_bids_prices = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "bids_prices.txt")
+            )
+            self.bfw_bids_quantities = BufferedFileWriter(
+                a_use_gzip, os.path.join(self.directory, "bids_quantities.txt")
+            )
 
 
 class Row:
@@ -444,7 +506,9 @@ def process_block(
 
     block_info = get_block_info(
         a_client,
-        args,
+        args.database,
+        args.table,
+        args.is_snapshot,
         a_instrument,
         a_instrument_date
     )
@@ -470,7 +534,9 @@ def process_block(
                                                                               a_instrument_date))
         batch_query = get_batch(
             a_client,
-            args,
+            args.database,
+            args.table,
+            args.is_snapshot,
             a_instrument,
             a_instrument_date,
             intervals[i][0],

@@ -6,81 +6,71 @@ import clickhouse_connect
 
 import utils
 
-command_array = ["python3", "clickhouse_dumper.py"]
+##############################################
+# CONFIG
+JUST_PRINT = 0
 
 NUM_THREADS = 20
+INTENDED_BATCH_SIZE = 20000
 
 ROOT_FOLDER_PATH = "./data/"
-INTENDED_BATCH_SIZE = 20000
+
 DATABASE = "binance_futures_history"
 TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
+INSTRUMENTS_WHITE_LIST = ['INJ_USDT_PERP', 'LIT_USDT_PERP']
+DATE_WHITE_LIST = ['.*']
+
 HOST = "clickhouse.giant.agtrading.ru"
 PORT = 443
-INSTRUMENTS_WHITE_LIST = ['INJ_USDT_PERP']
-DATE_WHITE_LIST = ['.*']
+
 QUIET = 1
 USE_GZIP = 1
-
-command_array.append("--root_folder_path")
-command_array.append(ROOT_FOLDER_PATH)
-
-command_array.append("--intended_batch_size")
-command_array.append(str(INTENDED_BATCH_SIZE))
-
-command_array.append("--database")
-command_array.append(DATABASE)
-
-command_array.append("--table")
-command_array.append(TABLE)
-
-command_array.append("--is_snapshot")
-command_array.append(str(IS_SNAPSHOT))
-
-command_array.append("--host")
-command_array.append(HOST)
-
-command_array.append("--port")
-command_array.append(str(PORT))
-
-if QUIET:
-    command_array.append("--quiet")
-
-if USE_GZIP:
-    command_array.append("--use_gzip")
+##############################################
 
 print("Attempting to connect...", end="\t")
 client = clickhouse_connect.get_client(host=HOST, port=PORT, username='default', password='')
 print("Connected to ClickHouse!\n")
 
 print("Getting instruments...", end="\t")
-
-args = utils.FakeArgs(DATABASE, TABLE, IS_SNAPSHOT)
-
-instruments = utils.get_instruments(client, args)
+instruments = utils.get_instruments(client, DATABASE, TABLE)
 instruments = utils.filter_list_whitelist(instruments, INSTRUMENTS_WHITE_LIST)
+instruments.sort()
 print("Got {} instruments after filtering!\n".format(len(instruments)))
+
+instrument_dates = {}
+
+for instrument in instruments:
+    print("Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
+    instrument_dates[instrument] = utils.get_instrument_dates(client, DATABASE, TABLE, instrument)
+    instrument_dates[instrument] = utils.filter_list_whitelist(instrument_dates[instrument], DATE_WHITE_LIST)
+    instrument_dates[instrument].sort()
+    print("Got {} dates after filtering!".format(len(instrument_dates[instrument])))
+print()
+
+print("====================================================================================================")
+print("{:^100}".format("Selected instruments and dates:"))
+utils.print_instrument_dates_table(instrument_dates)
+print("====================================================================================================")
+
+if JUST_PRINT:
+    exit()
 
 blocks = []
 
 for instrument in instruments:
-    print("Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
-    instrument_dates = utils.get_instrument_dates(client, args, instrument)
-    instrument_dates = utils.filter_list_whitelist(instrument_dates, DATE_WHITE_LIST)
-    print("Got {} dates after filtering!".format(len(instrument_dates)))
-
-    for instrument_date in instrument_dates:
-        blocks.append([instrument, instrument_date])
-print()
+    for date in instrument_dates[instrument]:
+        blocks.append([instrument, date])
 
 blocks.reverse()  # to pop from the 'beginning'
 
 total_blocks = len(blocks)
 processed_blocks = 0
+count_errors = 0
 
 
 def launch_thread(a_block):
-    global processed_blocks
+    global processed_blocks, count_errors
 
     command_array_copy = command_array.copy()
     command_array_copy.append("--dump_one_block")
@@ -92,12 +82,35 @@ def launch_thread(a_block):
 
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8').rstrip())
+    p.poll()
+    if p.returncode != 0:
+        print(utils.make_red("Error while processing block: Instrument: {}, Date: {}".format(a_block[0], a_block[1])))
+        count_errors += 1
     processed_blocks += 1
 
 
-print("===================================================================")
-print("Starting processing of {} blocks in up to {} threads:".format(total_blocks, NUM_THREADS))
-print("===================================================================\n")
+print("{:^100}".format("Starting processing of {} blocks in up to {} threads:".format(total_blocks, NUM_THREADS)))
+print("====================================================================================================\n")
+
+##############################################
+# Create command array:
+command_array = [
+    "python3", "clickhouse_dumper.py",
+    "--root_folder_path", ROOT_FOLDER_PATH,
+    "--intended_batch_size", str(INTENDED_BATCH_SIZE),
+    "--database", DATABASE,
+    "--table", TABLE,
+    "--is_snapshot", str(IS_SNAPSHOT),
+    "--host", HOST,
+    "--port", str(PORT)
+]
+if QUIET:
+    command_array.append("--quiet")
+
+if USE_GZIP:
+    command_array.append("--use_gzip")
+##############################################
+
 process_blocks_start_time = time.time()
 
 for i in range(NUM_THREADS):
@@ -123,7 +136,9 @@ while True:
         t = threading.Thread(target=launch_thread, args=(block,))
         t.start()
 
-print("===================================================================")
+print("====================================================================================================\n")
+if count_errors > 0:
+    print(utils.make_red("Finished with {} errors!".format(count_errors)))
 print("All threads finished! Done in {} (h:m:s).".format(
     datetime.timedelta(seconds=int(time.time() - process_blocks_start_time))))
-print("===================================================================")
+print("====================================================================================================\n")
