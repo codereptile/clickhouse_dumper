@@ -47,7 +47,7 @@ WHERE active AND database='{}' and table='{}'""".format(self.database_name, self
         self.rows = int(query_get_table_info_result.result_rows[0][3])
 
     def __lt__(self, other):
-        return self.size_on_disk > other.size_on_disk
+        return self.rows > other.rows
 
 
 class DatabaseInfo:
