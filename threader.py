@@ -8,14 +8,14 @@ import utils
 
 ##############################################
 # CONFIG
-JUST_PRINT = 1
+JUST_PRINT = 0
 
 NUM_THREADS = 30
 INTENDED_BATCH_SIZE = 20000
 
-ROOT_FOLDER_PATH = "./data"
+ROOT_FOLDER_PATH = "./binance_futures_all_instruments_2022-11-12_2023-01-08"
 
-DATABASE = "binance_futures_history"
+DATABASE = "restore_binance_futures_history_backup_all_tables_08_01_2023"
 TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
 INSTRUMENTS_WHITE_LIST = ['.*']
@@ -28,30 +28,32 @@ QUIET = 1
 USE_GZIP = 1
 ##############################################
 
-print("Attempting to connect...", end="\t")
+utils.quiet_print(False, "Attempting to connect...", end="\t")
 client = clickhouse_connect.get_client(host=HOST, port=PORT, username='default', password='')
-print("Connected to ClickHouse!\n")
+utils.quiet_print(False, "Connected to ClickHouse!\n")
 
-print("Getting instruments...", end="\t")
+utils.quiet_print(False, "Getting instruments...", end="\t")
 instruments = utils.get_instruments(client, DATABASE, TABLE)
 instruments = utils.filter_list_whitelist(instruments, INSTRUMENTS_WHITE_LIST)
 instruments.sort()
-print("Got {} instruments after filtering!\n".format(len(instruments)))
+utils.quiet_print(False, "Got {} instruments after filtering!\n".format(len(instruments)))
 
 instrument_dates = {}
 
 for instrument in instruments:
-    print("Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
+    utils.quiet_print(False, "Getting dates for instrument {0:20}".format(instrument + "..."), end="\t")
     instrument_dates[instrument] = utils.get_instrument_dates(client, DATABASE, TABLE, instrument)
     instrument_dates[instrument] = utils.filter_list_whitelist(instrument_dates[instrument], DATE_WHITE_LIST)
     instrument_dates[instrument].sort()
-    print("Got {} dates after filtering!".format(len(instrument_dates[instrument])))
-print()
+    utils.quiet_print(False, "Got {} dates after filtering!".format(len(instrument_dates[instrument])))
+utils.quiet_print(False, )
 
-print("====================================================================================================")
-print("{:^100}".format("Selected instruments and dates:"))
+utils.quiet_print(False,
+                  "====================================================================================================")
+utils.quiet_print(False, "{:^100}".format("Selected instruments and dates:"))
 utils.print_instrument_dates_table(instrument_dates)
-print("====================================================================================================")
+utils.quiet_print(False,
+                  "====================================================================================================")
 
 if JUST_PRINT:
     exit()
@@ -75,25 +77,27 @@ def launch_thread(a_block):
     command_array_copy = command_array.copy()
     command_array_copy.append("--dump_one_block")
     command_array_copy.extend(a_block)
-    print("Launching thread for block: {}".format(a_block))
+    utils.quiet_print(False, "Launching thread for block: {}".format(a_block))
     p = subprocess.Popen(command_array_copy,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
 
     for line in iter(p.stdout.readline, b''):
-        print(line.decode('utf-8').rstrip())
+        utils.quiet_print(False, line.decode('utf-8').rstrip())
     while p.poll() is None:
         time.sleep(0.1)
     if p.returncode != 0:
-        print(utils.make_red(
+        utils.quiet_print(False, utils.make_red(
             "Error while processing block: Instrument: {}, Date: {}, return code: {}".format(a_block[0], a_block[1],
                                                                                              p.returncode)))
         count_errors += 1
     processed_blocks += 1
 
 
-print("{:^100}".format("Starting processing of {} blocks in up to {} threads:".format(total_blocks, NUM_THREADS)))
-print("====================================================================================================\n")
+utils.quiet_print(False, "{:^100}".format(
+    "Starting processing of {} blocks in up to {} threads:".format(total_blocks, NUM_THREADS)))
+utils.quiet_print(False,
+                  "====================================================================================================\n")
 
 ##############################################
 # Create command array:
@@ -139,9 +143,11 @@ while True:
         t = threading.Thread(target=launch_thread, args=(block,))
         t.start()
 
-print("====================================================================================================")
+utils.quiet_print(False,
+                  "====================================================================================================")
 if count_errors > 0:
-    print(utils.make_red("Finished with {} errors!".format(count_errors)))
-print("All threads finished! Done in {} (h:m:s).".format(
+    utils.quiet_print(False, utils.make_red("Finished with {} errors!".format(count_errors)))
+utils.quiet_print(False, "All threads finished! Done in {} (h:m:s).".format(
     datetime.timedelta(seconds=int(time.time() - process_blocks_start_time))))
-print("====================================================================================================\n")
+utils.quiet_print(False,
+                  "====================================================================================================\n")
