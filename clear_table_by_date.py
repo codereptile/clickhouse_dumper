@@ -6,6 +6,7 @@ import utils
 DATABASE = "database_name"  # DOUBLE CHECK THIS!!!
 DATE_UNTIL = 'yyyy-mm-dd'  # DOUBLE CHECK THIS!!!
 
+# TODO: make a config of date expression eg. '<' or '<=' or ...
 HOST = "clickhouse.giant.agtrading.ru"
 PORT = 443
 ##############################################
@@ -31,7 +32,7 @@ print()
 
 for table in tables:
     print("Marking to clear table {:30}".format(table), end="\t")
-    # utils.clear_table_by_date(client, DATABASE, table, DATE_UNTIL)
+    utils.clear_table_by_date(client, DATABASE, table, DATE_UNTIL)
     print("Table marked!")
 print()
 

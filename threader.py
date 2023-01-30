@@ -8,17 +8,17 @@ import utils
 
 ##############################################
 # CONFIG
-JUST_PRINT = 0
+JUST_PRINT = 1
 
 NUM_THREADS = 30
 INTENDED_BATCH_SIZE = 20000
 
-ROOT_FOLDER_PATH = "./binance_futures_history_BTC_ETH_BNB_01.26-01.28/"
+ROOT_FOLDER_PATH = "./data"
 
 DATABASE = "binance_futures_history"
 TABLE = "uDepthUpdates"
 IS_SNAPSHOT = 1
-INSTRUMENTS_WHITE_LIST = ['BTC_USDT_PERP', 'ETH_USDT_PERP', 'BNB_USDT_PERP']
+INSTRUMENTS_WHITE_LIST = ['.*']
 DATE_WHITE_LIST = ['.*']
 
 HOST = "clickhouse.giant.agtrading.ru"
